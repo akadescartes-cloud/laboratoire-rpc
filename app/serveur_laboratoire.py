@@ -1,13 +1,15 @@
 
 import os
+import threading
 from concurrent import futures
+
 import grpc
+from flask import Flask
 
 from app import laboratoire_pb2
 from app import laboratoire_pb2_grpc
 
 
-# Donnees fictives du laboratoire pour les tests
 RESULTATS = {
     101: {
         "analyse": "Glycemie",
@@ -23,14 +25,13 @@ RESULTATS = {
 
 
 class LaboratoireService(laboratoire_pb2_grpc.LaboratoireServicer):
-
     def ObtenirResultat(self, request, context):
         patient_id = request.patient_id
 
         if patient_id not in RESULTATS:
             context.abort(
                 grpc.StatusCode.NOT_FOUND,
-                f"Aucun resultat pour le patient {patient_id}"
+                f"Aucun resultat pour le patient {patient_id}",
             )
 
         resultat = RESULTATS[patient_id]
@@ -43,7 +44,32 @@ class LaboratoireService(laboratoire_pb2_grpc.LaboratoireServicer):
         )
 
 
+app = Flask(__name__)
+
+
+@app.route("/")
+def accueil():
+    return "Service Laboratoire OK", 200
+
+
+@app.route("/health")
+def health():
+    return {"status": "ok", "service": "laboratoire"}, 200
+
+
 def demarrer_serveur():
+    # Serveur HTTP pour Render
+    port_http = int(os.environ.get("PORT", "10000"))
+    threading.Thread(
+        target=lambda: app.run(
+            host="0.0.0.0",
+            port=port_http,
+            use_reloader=False,
+        ),
+        daemon=True,
+    ).start()
+
+    # Serveur gRPC sur un port distinct
     serveur = grpc.server(
         futures.ThreadPoolExecutor(max_workers=10)
     )
@@ -52,16 +78,17 @@ def demarrer_serveur():
         LaboratoireService(), serveur
     )
 
-    # Render fournit PORT ; en local, on utilise 50051.
-    port = int(os.environ.get("PORT", "50051"))
-
-    port_ouvert = serveur.add_insecure_port(f"[::]:{port}")
+    port_grpc = int(os.environ.get("GRPC_PORT", "50051"))
+    port_ouvert = serveur.add_insecure_port(f"[::]:{port_grpc}")
 
     if port_ouvert == 0:
-        raise RuntimeError(f"Impossible d'ouvrir le port {port}")
+        raise RuntimeError(
+            f"Impossible d'ouvrir le port gRPC {port_grpc}"
+        )
 
     serveur.start()
-    print(f"Serveur Laboratoire demarre sur le port {port}")
+    print(f"Serveur HTTP demarre sur le port {port_http}")
+    print(f"Serveur gRPC demarre sur le port {port_grpc}")
 
     serveur.wait_for_termination()
 
