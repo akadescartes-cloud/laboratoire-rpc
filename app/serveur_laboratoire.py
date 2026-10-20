@@ -4,20 +4,40 @@ import threading
 from concurrent import futures
 
 import grpc
-from flask import Flask, jsonify, render_template_string
+import requests
+from flask import Flask, jsonify, render_template_string, request
 
-from app import laboratoire_pb2
-from app import laboratoire_pb2_grpc
+import laboratoire_pb2
+import laboratoire_pb2_grpc
 
 
-# Donnees fictives pour les tests
+# =========================================================
+# CONFIGURATION
+# =========================================================
+
+PORT = int(os.environ.get("PORT", "10000"))
+GRPC_PORT = int(os.environ.get("GRPC_PORT", "50051"))
+
+URL_CONSULTATION = (
+    "https://serviceconsultation.onrender.com/api/notifs"
+)
+
+app = Flask(__name__)
+
+
+# =========================================================
+# DONNEES DE DEMONSTRATION DU LABORATOIRE
+# =========================================================
+
 RESULTATS = {
     101: {
+        "patient_id": 101,
         "analyse": "Glycemie",
         "valeur": "0.95 g/L",
         "statut": "Disponible",
     },
     102: {
+        "patient_id": 102,
         "analyse": "Hemoglobine",
         "valeur": "13.5 g/dL",
         "statut": "Disponible",
@@ -25,37 +45,57 @@ RESULTATS = {
 }
 
 
-# =========================
+def obtenir_resultat(patient_id):
+    """Retourne le resultat d'un patient ou None."""
+    return RESULTATS.get(patient_id)
+
+
+# =========================================================
 # SERVICE gRPC
-# =========================
+# =========================================================
 
-class LaboratoireService(laboratoire_pb2_grpc.LaboratoireServicer):
+class LaboratoireService(
+    laboratoire_pb2_grpc.LaboratoireServicer
+):
+    def ObtenirResultat(self, requete, contexte):
+        resultat = obtenir_resultat(requete.patient_id)
 
-    def ObtenirResultat(self, request, context):
-        patient_id = request.patient_id
-
-        if patient_id not in RESULTATS:
-            context.abort(
+        if resultat is None:
+            contexte.abort(
                 grpc.StatusCode.NOT_FOUND,
-                f"Aucun resultat pour le patient {patient_id}",
+                "Aucun resultat pour ce patient."
             )
 
-        resultat = RESULTATS[patient_id]
-
         return laboratoire_pb2.Resultat(
-            patient_id=patient_id,
+            patient_id=resultat["patient_id"],
             analyse=resultat["analyse"],
             valeur=resultat["valeur"],
             statut=resultat["statut"],
         )
 
 
-# =========================
-# APPLICATION WEB ET REST
-# =========================
+def demarrer_grpc():
+    """Demarre le serveur gRPC."""
+    serveur = grpc.server(
+        futures.ThreadPoolExecutor(max_workers=10)
+    )
 
-app = Flask(__name__)
+    laboratoire_pb2_grpc.add_LaboratoireServicer_to_server(
+        LaboratoireService(),
+        serveur
+    )
 
+    serveur.add_insecure_port(f"[::]:{GRPC_PORT}")
+    serveur.start()
+
+    print(f"Serveur gRPC demarre sur le port {GRPC_PORT}")
+
+    serveur.wait_for_termination()
+
+
+# =========================================================
+# INTERFACE WEB
+# =========================================================
 
 PAGE_HTML = """
 <!DOCTYPE html>
@@ -63,322 +103,258 @@ PAGE_HTML = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Laboratoire | Clinique Espoir</title>
+
+    <title>Laboratoire médical</title>
+
     <style>
-        * { box-sizing: border-box; }
+        * {
+            box-sizing: border-box;
+        }
 
         body {
             margin: 0;
-            font-family: Arial, Helvetica, sans-serif;
-            background: #f4f8fc;
-            color: #18324b;
+            font-family: Arial, sans-serif;
+            background: #f1f5f9;
+            color: #1e293b;
         }
 
         header {
-            background: white;
-            border-bottom: 1px solid #e4edf5;
-            padding: 20px 7%;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .brand {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            font-weight: bold;
-            font-size: 20px;
-        }
-
-        .logo {
-            width: 42px;
-            height: 42px;
-            border-radius: 13px;
-            background: #e2f3f5;
-            display: grid;
-            place-items: center;
-            font-size: 23px;
-        }
-
-        .online {
-            color: #16866f;
-            background: #e6f7f1;
-            padding: 9px 13px;
-            border-radius: 30px;
-            font-size: 13px;
+            background: #087f8c;
+            color: white;
+            padding: 25px 15px;
+            text-align: center;
         }
 
         main {
-            max-width: 760px;
-            margin: 65px auto;
-            padding: 0 20px;
+            max-width: 750px;
+            margin: 35px auto;
+            padding: 0 15px;
         }
 
-        .intro { text-align: center; }
-
-        .eyebrow {
-            color: #168b9b;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            font-size: 12px;
-            font-weight: bold;
-        }
-
-        h1 {
-            font-size: clamp(28px, 5vw, 40px);
-            margin: 14px 0;
-        }
-
-        .subtitle {
-            color: #718399;
-            line-height: 1.7;
-            margin-bottom: 35px;
-        }
-
-        .panel {
+        .card {
             background: white;
-            padding: 28px;
-            border-radius: 20px;
-            box-shadow: 0 12px 40px rgba(36, 69, 100, 0.07);
-            border: 1px solid #e8eff6;
+            padding: 25px;
+            margin-bottom: 20px;
+            border-radius: 14px;
+            box-shadow: 0 4px 15px #0000000d;
+        }
+
+        h2 {
+            margin-top: 0;
+            color: #087f8c;
         }
 
         label {
             display: block;
-            font-size: 14px;
+            margin: 15px 0 7px;
             font-weight: bold;
-            margin-bottom: 10px;
-        }
-
-        .search-row {
-            display: flex;
-            gap: 10px;
         }
 
         input {
-            flex: 1;
-            min-width: 0;
-            padding: 15px;
-            border: 1px solid #d8e3ed;
-            border-radius: 10px;
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
             font-size: 16px;
-            outline: none;
         }
 
-        input:focus { border-color: #168b9b; }
-
         button {
-            border: 0;
-            border-radius: 10px;
-            padding: 0 22px;
-            background: #167e91;
+            width: 100%;
+            margin-top: 18px;
+            padding: 13px;
+            border: none;
+            border-radius: 8px;
+            background: #087f8c;
             color: white;
-            font-size: 15px;
-            font-weight: bold;
+            font-size: 16px;
             cursor: pointer;
         }
 
-        button:hover { background: #106879; }
-        button:disabled { opacity: 0.6; cursor: wait; }
-
-        #message {
-            margin-top: 18px;
-            color: #b54747;
-            font-size: 14px;
+        button:hover {
+            background: #066874;
         }
 
-        .result {
-            display: none;
-            margin-top: 25px;
-            background: white;
-            border: 1px solid #e0ebf2;
-            border-radius: 20px;
-            overflow: hidden;
-            box-shadow: 0 12px 35px rgba(36, 69, 100, 0.06);
+        .resultat {
+            margin-top: 20px;
+            padding: 15px;
+            background: #ecfeff;
+            border-radius: 8px;
+            white-space: pre-wrap;
         }
 
-        .result-head {
-            padding: 20px 24px;
-            border-bottom: 1px solid #edf2f7;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .patient {
-            font-size: 18px;
-            font-weight: bold;
-        }
-
-        .badge {
-            background: #e4f7ee;
-            color: #16805e;
-            padding: 8px 12px;
-            border-radius: 30px;
-            font-size: 12px;
-            font-weight: bold;
-        }
-
-        .result-body { padding: 25px; }
-
-        .analysis-label {
-            color: #77899d;
-            font-size: 13px;
-        }
-
-        .analysis {
-            font-size: 23px;
-            font-weight: bold;
-            margin: 9px 0 20px;
-        }
-
-        .value-box {
-            background: #f0f8fb;
-            border-radius: 14px;
-            padding: 20px;
-        }
-
-        .value {
-            font-size: 32px;
-            color: #167e91;
-            font-weight: bold;
-            margin-top: 8px;
+        .message {
+            margin-top: 15px;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
         }
 
         footer {
             text-align: center;
-            color: #8b9aab;
-            font-size: 12px;
-            padding: 30px 15px;
-        }
-
-        @media (max-width: 520px) {
-            header { padding: 16px 5%; }
-            main { margin-top: 38px; }
-            .panel { padding: 20px; }
-            .search-row { flex-direction: column; }
-            button { padding: 15px; }
+            padding: 20px;
+            color: #64748b;
         }
     </style>
 </head>
+
 <body>
     <header>
-        <div class="brand">
-            <div class="logo">⚗</div>
-            <div>Laboratoire</div>
-        </div>
-        <div class="online">● Service actif</div>
+        <h1>Laboratoire médical</h1>
+        <p>Consultation des résultats d'analyses</p>
     </header>
 
     <main>
-        <section class="intro">
-            <div class="eyebrow">Clinique Espoir</div>
-            <h1>Résultats d'analyses</h1>
-            <p class="subtitle">
-                Retrouvez rapidement un résultat de laboratoire
-                à partir de l'identifiant du patient.
+        <section class="card">
+            <h2>Consulter un résultat</h2>
+
+            <label for="patient_id">Identifiant du patient</label>
+            <input
+                id="patient_id"
+                type="number"
+                min="1"
+                placeholder="Exemple : 101"
+            >
+
+            <button onclick="consulterResultat()">
+                Consulter
+            </button>
+
+            <div id="resultat" class="resultat">
+                Entre un identifiant pour afficher le résultat.
+            </div>
+        </section>
+
+        <section class="card">
+            <h2>Notifier le service Consultation</h2>
+
+            <p>
+                Envoie une notification quand un résultat est disponible.
             </p>
-        </section>
 
-        <section class="panel">
-            <label for="patientId">Identifiant du patient</label>
-            <div class="search-row">
-                <input
-                    id="patientId"
-                    type="number"
-                    min="1"
-                    placeholder="Ex. : 101"
-                    value="101"
-                >
-                <button id="searchButton" onclick="rechercher()">
-                    Rechercher
-                </button>
-            </div>
-            <div id="message" role="status"></div>
-        </section>
+            <label for="notif_patient_id">
+                Identifiant du patient
+            </label>
+            <input
+                id="notif_patient_id"
+                type="number"
+                min="1"
+                placeholder="Exemple : 101"
+            >
 
-        <section id="result" class="result" aria-live="polite">
-            <div class="result-head">
-                <div class="patient" id="patient">Patient #101</div>
-                <div class="badge" id="status">Disponible</div>
-            </div>
-            <div class="result-body">
-                <div class="analysis-label">Analyse réalisée</div>
-                <div class="analysis" id="analysis">Glycemie</div>
-                <div class="value-box">
-                    <div class="analysis-label">Résultat</div>
-                    <div class="value" id="value">0.95 g/L</div>
-                </div>
-            </div>
+            <label for="id_dossier">
+                Identifiant du dossier Consultation
+            </label>
+            <input
+                id="id_dossier"
+                type="text"
+                placeholder="Exemple : D001"
+            >
+
+            <label for="id_resultat">
+                Identifiant du résultat
+            </label>
+            <input
+                id="id_resultat"
+                type="text"
+                placeholder="Exemple : RES-42"
+            >
+
+            <button onclick="envoyerNotification()">
+                Envoyer la notification
+            </button>
+
+            <div id="notification" class="message"></div>
         </section>
     </main>
 
     <footer>
-        Laboratoire · API REST · Clinique Espoir
+        Projet RPC — Service Laboratoire
     </footer>
 
     <script>
-        async function rechercher() {
-            const input = document.getElementById("patientId");
-            const button = document.getElementById("searchButton");
-            const message = document.getElementById("message");
-            const result = document.getElementById("result");
-            const id = input.value.trim();
+        async function consulterResultat() {
+            const id = document.getElementById("patient_id").value;
+            const affichage = document.getElementById("resultat");
 
-            message.textContent = "";
-            result.style.display = "none";
-
-            if (!id || !Number.isInteger(Number(id)) || Number(id) < 1) {
-                message.textContent =
-                    "Veuillez saisir un identifiant de patient valide.";
+            if (!id) {
+                affichage.textContent = "Entre un identifiant de patient.";
                 return;
             }
 
-            button.disabled = true;
-            button.textContent = "Recherche...";
-            
-            try {
-                const response = await fetch(
-                    "/api/resultats/" + encodeURIComponent(id)
-                );
-                const data = await response.json();
+            affichage.textContent = "Recherche en cours...";
 
-                if (!response.ok) {
-                    throw new Error(
-                        data.erreur || "Résultat introuvable."
-                    );
+            try {
+                const reponse = await fetch("/api/resultats/" + id);
+                const donnees = await reponse.json();
+
+                if (!reponse.ok) {
+                    affichage.textContent =
+                        donnees.erreur || "Résultat introuvable.";
+                    return;
                 }
 
-                document.getElementById("patient").textContent =
-                    "Patient #" + data.patient_id;
-                document.getElementById("analysis").textContent =
-                    data.analyse;
-                document.getElementById("value").textContent =
-                    data.valeur;
-                document.getElementById("status").textContent =
-                    data.statut;
-
-                result.style.display = "block";
-            } catch (error) {
-                message.textContent =
-                    error.message || "Impossible de contacter le service.";
-            } finally {
-                button.disabled = false;
-                button.textContent = "Rechercher";
+                affichage.textContent =
+                    "Patient : " + donnees.patient_id + "\\n" +
+                    "Analyse : " + donnees.analyse + "\\n" +
+                    "Valeur : " + donnees.valeur + "\\n" +
+                    "Statut : " + donnees.statut;
+            } catch (erreur) {
+                affichage.textContent =
+                    "Erreur réseau : impossible de contacter le laboratoire.";
             }
         }
 
-        document.getElementById("patientId").addEventListener(
-            "keydown",
-            function(event) {
-                if (event.key === "Enter") rechercher();
-            }
-        );
+        async function envoyerNotification() {
+            const patientId =
+                document.getElementById("notif_patient_id").value;
 
-        // Afficher le résultat initial du patient 101
-        rechercher();
+            const idDossier =
+                document.getElementById("id_dossier").value.trim();
+
+            const idResultat =
+                document.getElementById("id_resultat").value.trim();
+
+            const affichage =
+                document.getElementById("notification");
+
+            if (!patientId || !idDossier || !idResultat) {
+                affichage.textContent =
+                    "Remplis les trois champs avant l'envoi.";
+                return;
+            }
+
+            affichage.textContent = "Envoi en cours...";
+
+            try {
+                const reponse = await fetch("/api/notifier-resultat", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        patient_id: Number(patientId),
+                        id_dossier: idDossier,
+                        id_resultat: idResultat
+                    })
+                });
+
+                const donnees = await reponse.json();
+
+                if (!reponse.ok) {
+                    affichage.textContent =
+                        "Échec : " +
+                        (donnees.erreur || "notification non envoyée.");
+                    return;
+                }
+
+                affichage.textContent =
+                    "Notification envoyée à Consultation.\\n" +
+                    "Identifiant : " +
+                    (donnees.id_notif || "non communiqué");
+            } catch (erreur) {
+                affichage.textContent =
+                    "Erreur réseau : impossible de contacter le laboratoire.";
+            }
+        }
     </script>
 </body>
 </html>
@@ -390,75 +366,158 @@ def accueil():
     return render_template_string(PAGE_HTML)
 
 
+# =========================================================
+# API REST DU LABORATOIRE
+# =========================================================
+
 @app.route("/health", methods=["GET"])
 def health():
     return jsonify({
         "status": "ok",
-        "service": "laboratoire",
+        "service": "laboratoire"
     }), 200
 
 
 @app.route("/api/resultats/<int:patient_id>", methods=["GET"])
-def obtenir_resultat_rest(patient_id):
-    if patient_id not in RESULTATS:
+def api_obtenir_resultat(patient_id):
+    resultat = obtenir_resultat(patient_id)
+
+    if resultat is None:
         return jsonify({
-            "erreur": f"Aucun resultat pour le patient {patient_id}"
+            "erreur": "Aucun resultat pour ce patient."
         }), 404
 
-    resultat = RESULTATS[patient_id]
+    return jsonify(resultat), 200
+
+
+# =========================================================
+# NOTIFICATION DU SERVICE CONSULTATION
+# =========================================================
+
+def notifier_consultation(id_dossier, id_resultat):
+    """
+    Envoie le résultat au service Consultation par REST.
+    Le type L signifie Laboratoire.
+    """
+
+    donnees = {
+        "id_dossier": id_dossier,
+        "id_resultat": id_resultat,
+        "type": "L"
+    }
+
+    try:
+        reponse = requests.post(
+            URL_CONSULTATION,
+            json=donnees,
+            timeout=5
+        )
+
+        if not reponse.ok:
+            return {
+                "succes": False,
+                "erreur": (
+                    f"Consultation a répondu avec le code "
+                    f"{reponse.status_code}."
+                )
+            }
+
+        try:
+            resultat = reponse.json()
+        except ValueError:
+            resultat = {}
+
+        return {
+            "succes": True,
+            "donnees": resultat
+        }
+
+    except requests.Timeout:
+        return {
+            "succes": False,
+            "erreur": "Délai dépassé : Consultation n'a pas répondu à temps."
+        }
+
+    except requests.RequestException as erreur:
+        return {
+            "succes": False,
+            "erreur": f"Erreur réseau vers Consultation : {erreur}"
+        }
+
+
+@app.route("/api/notifier-resultat", methods=["POST"])
+def api_notifier_resultat():
+    donnees = request.get_json(silent=True)
+
+    if not isinstance(donnees, dict):
+        return jsonify({
+            "erreur": "Le corps de la requête doit être un JSON valide."
+        }), 400
+
+    patient_id = donnees.get("patient_id")
+    id_dossier = donnees.get("id_dossier")
+    id_resultat = donnees.get("id_resultat")
+
+    if patient_id is None or not id_dossier or not id_resultat:
+        return jsonify({
+            "erreur": (
+                "Les champs patient_id, id_dossier et id_resultat "
+                "sont obligatoires."
+            )
+        }), 400
+
+    try:
+        patient_id = int(patient_id)
+    except (TypeError, ValueError):
+        return jsonify({
+            "erreur": "patient_id doit être un nombre entier."
+        }), 400
+
+    resultat = obtenir_resultat(patient_id)
+
+    if resultat is None:
+        return jsonify({
+            "erreur": "Impossible de notifier : patient inconnu."
+        }), 404
+
+    notification = notifier_consultation(
+        str(id_dossier),
+        str(id_resultat)
+    )
+
+    if not notification["succes"]:
+        return jsonify({
+            "erreur": notification["erreur"]
+        }), 502
+
+    reponse_consultation = notification["donnees"]
 
     return jsonify({
+        "message": "Notification envoyée au service Consultation.",
         "patient_id": patient_id,
-        "analyse": resultat["analyse"],
-        "valeur": resultat["valeur"],
-        "statut": resultat["statut"],
+        "id_dossier": str(id_dossier),
+        "id_resultat": str(id_resultat),
+        "type": "L",
+        "id_notif": reponse_consultation.get("id_notif")
     }), 200
 
 
-# =========================
+# =========================================================
 # DEMARRAGE DES SERVICES
-# =========================
-
-def demarrer_serveur():
-    port_http = int(os.environ.get("PORT", "10000"))
-
-    serveur_http = threading.Thread(
-        target=lambda: app.run(
-            host="0.0.0.0",
-            port=port_http,
-            use_reloader=False,
-            threaded=True,
-        ),
-        daemon=True,
-    )
-    serveur_http.start()
-
-    serveur_grpc = grpc.server(
-        futures.ThreadPoolExecutor(max_workers=10)
-    )
-
-    laboratoire_pb2_grpc.add_LaboratoireServicer_to_server(
-        LaboratoireService(),
-        serveur_grpc,
-    )
-
-    port_grpc = int(os.environ.get("GRPC_PORT", "50051"))
-    port_ouvert = serveur_grpc.add_insecure_port(
-        f"[::]:{port_grpc}"
-    )
-
-    if port_ouvert == 0:
-        raise RuntimeError(
-            f"Impossible d'ouvrir le port gRPC {port_grpc}"
-        )
-
-    serveur_grpc.start()
-
-    print(f"Serveur REST demarre sur le port {port_http}")
-    print(f"Serveur gRPC demarre sur le port {port_grpc}")
-
-    serveur_grpc.wait_for_termination()
-
+# =========================================================
 
 if __name__ == "__main__":
-    demarrer_serveur()
+    thread_grpc = threading.Thread(
+        target=demarrer_grpc,
+        daemon=True
+    )
+    thread_grpc.start()
+
+    print(f"Interface web et API REST sur le port {PORT}")
+
+    app.run(
+        host="0.0.0.0",
+        port=PORT,
+        debug=False,
+        use_reloader=False
+    )

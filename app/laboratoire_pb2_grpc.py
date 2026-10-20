@@ -3,7 +3,7 @@
 import grpc
 import warnings
 
-from app import laboratoire_pb2 as laboratoire__pb2
+import laboratoire_pb2 as laboratoire__pb2
 
 GRPC_GENERATED_VERSION = '1.84.0'
 GRPC_VERSION = grpc.__version__

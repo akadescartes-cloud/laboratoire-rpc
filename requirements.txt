@@ -1,5 +1,6 @@
 
+Flask
+requests
 grpcio
 grpcio-tools
 protobuf
-flask
