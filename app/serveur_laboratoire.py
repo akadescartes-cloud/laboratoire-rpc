@@ -1,4 +1,5 @@
 
+import os
 from concurrent import futures
 import grpc
 
@@ -25,8 +26,7 @@ class LaboratoireService(laboratoire_pb2_grpc.LaboratoireServicer):
 
     def ObtenirResultat(self, request, context):
         patient_id = request.patient_id
-        
-        # Verifier si le resultat existe
+
         if patient_id not in RESULTATS:
             context.abort(
                 grpc.StatusCode.NOT_FOUND,
@@ -52,10 +52,13 @@ def demarrer_serveur():
         LaboratoireService(), serveur
     )
 
-    port = serveur.add_insecure_port("[::]:50051")
+    # Render fournit PORT ; en local, on utilise 50051.
+    port = int(os.environ.get("PORT", "50051"))
 
-    if port == 0:
-        raise RuntimeError("Impossible d'ouvrir le port 50051")
+    port_ouvert = serveur.add_insecure_port(f"[::]:{port}")
+
+    if port_ouvert == 0:
+        raise RuntimeError(f"Impossible d'ouvrir le port {port}")
 
     serveur.start()
     print(f"Serveur Laboratoire demarre sur le port {port}")
