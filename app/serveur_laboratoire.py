@@ -26,7 +26,7 @@ app = Flask(__name__)
 
 
 # =========================================================
-# DONNEES DE DEMONSTRATION DU LABORATOIRE
+# RESULTATS DE DEMONSTRATION
 # =========================================================
 
 RESULTATS = {
@@ -44,9 +44,21 @@ RESULTATS = {
     },
 }
 
+# Correspondance entre identifiant du résultat et patient.
+# Remplacer ces identifiants de démonstration par les vrais.
+RESULTAT_IDS = {
+    "RES-42": 101,
+    "RES-101": 101,
+    "RES-102": 102,
+}
+
+# Ajouter l'URL de la vraie photo quand elle sera disponible.
+IMAGES_RESULTATS = {
+    # "RES-42": "https://votre-site.com/images/RES-42.png",
+}
+
 
 def obtenir_resultat(patient_id):
-    """Retourne le resultat d'un patient ou None."""
     return RESULTATS.get(patient_id)
 
 
@@ -75,7 +87,6 @@ class LaboratoireService(
 
 
 def demarrer_grpc():
-    """Demarre le serveur gRPC."""
     serveur = grpc.server(
         futures.ThreadPoolExecutor(max_workers=10)
     )
@@ -89,7 +100,6 @@ def demarrer_grpc():
     serveur.start()
 
     print(f"Serveur gRPC demarre sur le port {GRPC_PORT}")
-
     serveur.wait_for_termination()
 
 
@@ -103,13 +113,10 @@ PAGE_HTML = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
     <title>Laboratoire médical</title>
 
     <style>
-        * {
-            box-sizing: border-box;
-        }
+        * { box-sizing: border-box; }
 
         body {
             margin: 0;
@@ -139,10 +146,7 @@ PAGE_HTML = """
             box-shadow: 0 4px 15px #0000000d;
         }
 
-        h2 {
-            margin-top: 0;
-            color: #087f8c;
-        }
+        h2 { margin-top: 0; color: #087f8c; }
 
         label {
             display: block;
@@ -170,9 +174,7 @@ PAGE_HTML = """
             cursor: pointer;
         }
 
-        button:hover {
-            background: #066874;
-        }
+        button:hover { background: #066874; }
 
         .resultat {
             margin-top: 20px;
@@ -180,6 +182,7 @@ PAGE_HTML = """
             background: #ecfeff;
             border-radius: 8px;
             white-space: pre-wrap;
+            overflow-wrap: anywhere;
         }
 
         .message {
@@ -207,16 +210,10 @@ PAGE_HTML = """
             <h2>Consulter un résultat</h2>
 
             <label for="patient_id">Identifiant du patient</label>
-            <input
-                id="patient_id"
-                type="number"
-                min="1"
-                placeholder="Exemple : 101"
-            >
+            <input id="patient_id" type="number"
+                   min="1" placeholder="Exemple : 101">
 
-            <button onclick="consulterResultat()">
-                Consulter
-            </button>
+            <button onclick="consulterResultat()">Consulter</button>
 
             <div id="resultat" class="resultat">
                 Entre un identifiant pour afficher le résultat.
@@ -225,38 +222,21 @@ PAGE_HTML = """
 
         <section class="card">
             <h2>Notifier le service Consultation</h2>
+            <p>Envoie une notification quand un résultat est disponible.</p>
 
-            <p>
-                Envoie une notification quand un résultat est disponible.
-            </p>
-
-            <label for="notif_patient_id">
-                Identifiant du patient
-            </label>
-            <input
-                id="notif_patient_id"
-                type="number"
-                min="1"
-                placeholder="Exemple : 101"
-            >
+            <label for="notif_patient_id">Identifiant du patient</label>
+            <input id="notif_patient_id" type="number"
+                   min="1" placeholder="Exemple : 101">
 
             <label for="id_dossier">
                 Identifiant du dossier Consultation
             </label>
-            <input
-                id="id_dossier"
-                type="text"
-                placeholder="Exemple : D001"
-            >
+            <input id="id_dossier" type="text"
+                   placeholder="Exemple : D001">
 
-            <label for="id_resultat">
-                Identifiant du résultat
-            </label>
-            <input
-                id="id_resultat"
-                type="text"
-                placeholder="Exemple : RES-42"
-            >
+            <label for="id_resultat">Identifiant du résultat</label>
+            <input id="id_resultat" type="text"
+                   placeholder="Exemple : RES-42">
 
             <button onclick="envoyerNotification()">
                 Envoyer la notification
@@ -266,9 +246,7 @@ PAGE_HTML = """
         </section>
     </main>
 
-    <footer>
-        Projet RPC — Service Laboratoire
-    </footer>
+    <footer>Projet RPC — Service Laboratoire</footer>
 
     <script>
         async function consulterResultat() {
@@ -306,13 +284,10 @@ PAGE_HTML = """
         async function envoyerNotification() {
             const patientId =
                 document.getElementById("notif_patient_id").value;
-
             const idDossier =
                 document.getElementById("id_dossier").value.trim();
-
             const idResultat =
                 document.getElementById("id_resultat").value.trim();
-
             const affichage =
                 document.getElementById("notification");
 
@@ -390,16 +365,62 @@ def api_obtenir_resultat(patient_id):
     return jsonify(resultat), 200
 
 
+@app.route("/api/resultats/id/<string:id_resultat>", methods=["GET"])
+def api_resultat_par_id(id_resultat):
+    """Recupere un resultat par son identifiant unique."""
+
+    patient_id = RESULTAT_IDS.get(id_resultat)
+
+    if patient_id is None:
+        return jsonify({
+            "erreur": "Identifiant de resultat inconnu."
+        }), 404
+
+    resultat = obtenir_resultat(patient_id)
+
+    if resultat is None:
+        return jsonify({
+            "erreur": "Resultat introuvable."
+        }), 404
+
+    return jsonify({
+        "id_resultat": id_resultat,
+        **resultat,
+        "image_url": IMAGES_RESULTATS.get(id_resultat)
+    }), 200
+
+
+@app.route(
+    "/api/resultats/id/<string:id_resultat>/image",
+    methods=["GET"]
+)
+def api_image_resultat(id_resultat):
+    """Renvoie l'URL de la photo si elle est configuree."""
+
+    if id_resultat not in RESULTAT_IDS:
+        return jsonify({
+            "erreur": "Identifiant de resultat inconnu."
+        }), 404
+
+    image_url = IMAGES_RESULTATS.get(id_resultat)
+
+    if not image_url:
+        return jsonify({
+            "erreur": "Aucune photo n'est associee a ce resultat.",
+            "id_resultat": id_resultat
+        }), 404
+
+    return jsonify({
+        "id_resultat": id_resultat,
+        "image_url": image_url
+    }), 200
+
+
 # =========================================================
 # NOTIFICATION DU SERVICE CONSULTATION
 # =========================================================
 
 def notifier_consultation(id_dossier, id_resultat):
-    """
-    Envoie le résultat au service Consultation par REST.
-    Le type L signifie Laboratoire.
-    """
-
     donnees = {
         "id_dossier": id_dossier,
         "id_resultat": id_resultat,
@@ -417,7 +438,7 @@ def notifier_consultation(id_dossier, id_resultat):
             return {
                 "succes": False,
                 "erreur": (
-                    f"Consultation a répondu avec le code "
+                    "Consultation a repondu avec le code "
                     f"{reponse.status_code}."
                 )
             }
@@ -435,13 +456,13 @@ def notifier_consultation(id_dossier, id_resultat):
     except requests.Timeout:
         return {
             "succes": False,
-            "erreur": "Délai dépassé : Consultation n'a pas répondu à temps."
+            "erreur": "Delai depasse : Consultation n'a pas repondu a temps."
         }
 
     except requests.RequestException as erreur:
         return {
             "succes": False,
-            "erreur": f"Erreur réseau vers Consultation : {erreur}"
+            "erreur": f"Erreur reseau vers Consultation : {erreur}"
         }
 
 
@@ -451,7 +472,7 @@ def api_notifier_resultat():
 
     if not isinstance(donnees, dict):
         return jsonify({
-            "erreur": "Le corps de la requête doit être un JSON valide."
+            "erreur": "Le corps de la requete doit etre un JSON valide."
         }), 400
 
     patient_id = donnees.get("patient_id")
@@ -470,7 +491,7 @@ def api_notifier_resultat():
         patient_id = int(patient_id)
     except (TypeError, ValueError):
         return jsonify({
-            "erreur": "patient_id doit être un nombre entier."
+            "erreur": "patient_id doit etre un nombre entier."
         }), 400
 
     resultat = obtenir_resultat(patient_id)
@@ -479,6 +500,20 @@ def api_notifier_resultat():
         return jsonify({
             "erreur": "Impossible de notifier : patient inconnu."
         }), 404
+
+    # L'identifiant doit aussi correspondre a un resultat connu.
+    if id_resultat not in RESULTAT_IDS:
+        return jsonify({
+            "erreur": (
+                "Identifiant de resultat inconnu. "
+                "Ajoute-le dans RESULTAT_IDS."
+            )
+        }), 400
+
+    if RESULTAT_IDS[id_resultat] != patient_id:
+        return jsonify({
+            "erreur": "Cet identifiant de resultat ne correspond pas au patient."
+        }), 400
 
     notification = notifier_consultation(
         str(id_dossier),
@@ -493,7 +528,7 @@ def api_notifier_resultat():
     reponse_consultation = notification["donnees"]
 
     return jsonify({
-        "message": "Notification envoyée au service Consultation.",
+        "message": "Notification envoyee au service Consultation.",
         "patient_id": patient_id,
         "id_dossier": str(id_dossier),
         "id_resultat": str(id_resultat),
@@ -503,7 +538,7 @@ def api_notifier_resultat():
 
 
 # =========================================================
-# DEMARRAGE DES SERVICES
+# DEMARRAGE
 # =========================================================
 
 if __name__ == "__main__":
@@ -521,5 +556,3 @@ if __name__ == "__main__":
         debug=False,
         use_reloader=False
     )
-
-
