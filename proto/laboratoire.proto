@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package laboratoire;
+
+service Laboratoire {
+  rpc ObtenirResultat (RequeteResultat)
+      returns (Resultat);
+}
+
+message RequeteResultat {
+  int32 patient_id = 1;
+}
+
+message Resultat {
+  int32 patient_id = 1;
+  string analyse = 2;
+  string valeur = 3;
+  string statut = 4;
+}
