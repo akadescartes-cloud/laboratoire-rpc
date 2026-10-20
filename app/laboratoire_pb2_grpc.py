@@ -3,7 +3,7 @@
 import grpc
 import warnings
 
-import laboratoire_pb2 as laboratoire__pb2
+from app import laboratoire_pb2 as laboratoire__pb2
 
 GRPC_GENERATED_VERSION = '1.84.0'
 GRPC_VERSION = grpc.__version__
@@ -95,3 +95,4 @@ class Laboratoire:
             timeout,
             metadata,
             _registered_method=True)
+

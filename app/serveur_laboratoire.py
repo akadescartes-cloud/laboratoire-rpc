@@ -7,8 +7,8 @@ import grpc
 import requests
 from flask import Flask, jsonify, render_template_string, request
 
-import laboratoire_pb2
-import laboratoire_pb2_grpc
+from app import laboratoire_pb2
+from app import laboratoire_pb2_grpc
 
 
 # =========================================================
@@ -521,3 +521,5 @@ if __name__ == "__main__":
         debug=False,
         use_reloader=False
     )
+
+
