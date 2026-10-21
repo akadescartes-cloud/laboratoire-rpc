@@ -4,3 +4,4 @@ requests
 grpcio
 grpcio-tools
 protobuf
+Pillow
