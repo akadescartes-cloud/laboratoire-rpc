@@ -5,7 +5,7 @@ from concurrent import futures
 
 import grpc
 import requests
-from flask import Flask, jsonify, render_template_string, request
+from flask import Flask, jsonify, render_template_string, request, send_file
 
 from app import laboratoire_pb2
 from app import laboratoire_pb2_grpc
@@ -793,6 +793,139 @@ def api_obtenir_resultat_par_id(id_resultat):
         "id_resultat": id_resultat,
         "image_url": None
     }), 200
+
+
+
+
+# =========================================================
+# ROUTE IMAGE PNG DU COMPTE RENDU
+# =========================================================
+
+from io import BytesIO
+from PIL import Image, ImageDraw, ImageFont
+
+
+def generer_image_compte_rendu(id_resultat, resultat):
+    """Crée une image PNG du compte rendu à partir des données du laboratoire."""
+    largeur, hauteur = 1200, 850
+    image = Image.new("RGB", (largeur, hauteur), "#eef3f8")
+    draw = ImageDraw.Draw(image)
+
+    try:
+        police = ImageFont.truetype(
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 24
+        )
+        police_petite = ImageFont.truetype(
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 18
+        )
+        police_titre = ImageFont.truetype(
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 30
+        )
+        police_grande = ImageFont.truetype(
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 36
+        )
+    except OSError:
+        police = ImageFont.load_default()
+        police_petite = ImageFont.load_default()
+        police_titre = ImageFont.load_default()
+        police_grande = ImageFont.load_default()
+
+    bleu = "#174a8b"
+    bleu_clair = "#eaf2fb"
+    texte = "#202b3d"
+    ligne = "#bdc9d8"
+    vert = "#126338"
+
+    # Feuille blanche
+    draw.rounded_rectangle(
+        (55, 35, 1145, 815), radius=18, fill="white", outline="#d9e2ee", width=2
+    )
+
+    # En-tête
+    draw.rounded_rectangle((55, 35, 1145, 160), radius=18, fill=bleu)
+    draw.rectangle((55, 125, 1145, 160), fill=bleu)
+    draw.text((95, 65), "LABORATOIRE D'ANALYSES MEDICALES",
+              font=police_titre, fill="white")
+    draw.text((95, 112), "Biologie medicale au service de votre sante",
+              font=police_petite, fill="#e4efff")
+
+    # Titre et métadonnées
+    draw.rounded_rectangle((90, 190, 1110, 320), radius=12, fill=bleu_clair)
+    draw.text((130, 210), "RESULTAT D'ANALYSE MEDICALE",
+              font=police_grande, fill=bleu)
+    draw.text((130, 270), f"Reference : {id_resultat}",
+              font=police_petite, fill=texte)
+    draw.text((600, 270), f"Statut : {resultat.get('statut', 'Non renseigne')}",
+              font=police_petite, fill=vert)
+
+    # Informations patient
+    draw.text((100, 350), "INFORMATIONS PATIENT",
+              font=police_titre, fill=bleu)
+    draw.text((100, 395),
+              f"Identifiant patient : {resultat.get('patient_id', 'Non renseigne')}",
+              font=police_petite, fill=texte)
+    draw.text((100, 430), "Nom et prenom : Non renseignes",
+              font=police_petite, fill=texte)
+
+    # Tableau des résultats
+    draw.text((100, 485), "RESULTATS D'ANALYSES",
+              font=police_titre, fill=bleu)
+    x0, y0, x1, y1 = 95, 535, 1105, 635
+    draw.rectangle((x0, y0, x1, y1), outline=ligne, width=2)
+    draw.rectangle((x0, y0, x1, 580), fill="#2f70b9")
+    colonnes = [95, 430, 700, 900, 1105]
+    for x in colonnes[1:-1]:
+        draw.line((x, y0, x, y1), fill=ligne, width=2)
+    draw.line((x0, 580, x1, 580), fill=ligne, width=2)
+
+    entetes = [
+        ("Analyse", 115), ("Resultat", 450), ("Unite", 720), ("Statut", 920)
+    ]
+    for libelle, x in entetes:
+        draw.text((x, 547), libelle, font=police_petite, fill="white")
+
+    valeur = str(resultat.get("valeur", "Non renseignee"))
+    analyse = str(resultat.get("analyse", "Non renseignee"))
+    import re
+    match_unite = re.search(r"(g/L|g/dL|mg/dL|mmol/L)", valeur, re.I)
+    unite = match_unite.group(1) if match_unite else "—"
+
+    draw.text((115, 595), analyse, font=police_petite, fill=texte)
+    draw.text((450, 595), valeur, font=police_petite, fill=texte)
+    draw.text((720, 595), unite, font=police_petite, fill=texte)
+    draw.text((920, 595), str(resultat.get("statut", "Non renseigne")),
+              font=police_petite, fill=vert)
+
+    # Mention de démonstration
+    draw.rounded_rectangle((95, 670, 1105, 745), radius=10, fill="#f1f5f9")
+    draw.text((120, 685), "Document de demonstration genere automatiquement.",
+              font=police_petite, fill=texte)
+    draw.text((120, 715), "Ne remplace pas un compte rendu medical valide.",
+              font=police_petite, fill=texte)
+
+    sortie = BytesIO()
+    image.save(sortie, format="PNG")
+    sortie.seek(0)
+    return sortie
+
+
+@app.route("/api/resultats/id/<string:id_resultat>/image", methods=["GET"])
+def api_image_resultat(id_resultat):
+    patient_id = RESULTAT_IDS.get(id_resultat)
+    if patient_id is None:
+        return jsonify({"erreur": "Identifiant de résultat introuvable."}), 404
+
+    resultat = obtenir_resultat(patient_id)
+    if resultat is None:
+        return jsonify({"erreur": "Résultat introuvable."}), 404
+
+    image_png = generer_image_compte_rendu(id_resultat, resultat)
+    return send_file(
+        image_png,
+        mimetype="image/png",
+        download_name=f"{id_resultat}.png"
+    )
+
 
 
 # =========================================================
