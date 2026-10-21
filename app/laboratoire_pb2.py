@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x11laboratoire.proto\x12\x0blaboratoire\"%\n\x0fRequeteResultat\x12\x12\n\npatient_id\x18\x01 \x01(\x05\"O\n\x08Resultat\x12\x12\n\npatient_id\x18\x01 \x01(\x05\x12\x0f\n\x07\x61nalyse\x18\x02 \x01(\t\x12\x0e\n\x06valeur\x18\x03 \x01(\t\x12\x0e\n\x06statut\x18\x04 \x01(\t2U\n\x0bLaboratoire\x12\x46\n\x0fObtenirResultat\x12\x1c.laboratoire.RequeteResultat\x1a\x15.laboratoire.Resultatb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x11laboratoire.proto\x12\x0blaboratoire\"%\n\x0fRequeteResultat\x12\x12\n\npatient_id\x18\x01 \x01(\x05\"O\n\x08Resultat\x12\x12\n\npatient_id\x18\x01 \x01(\x05\x12\x0f\n\x07\x61nalyse\x18\x02 \x01(\t\x12\x0e\n\x06valeur\x18\x03 \x01(\t\x12\x0e\n\x06statut\x18\x04 \x01(\t\"\x8c\x01\n\x0e\x44\x65mandeAnalyse\x12\x12\n\nid_dossier\x18\x01 \x01(\t\x12\x1f\n\x17medecin_prescripteur_id\x18\x02 \x01(\t\x12\x1b\n\x13\x61nalyses_prescrites\x18\x03 \x03(\t\x12\x10\n\x08priorite\x18\x04 \x01(\t\x12\x16\n\x0eordonnance_ref\x18\x05 \x01(\t\"c\n\x15ReponseDemandeAnalyse\x12\x15\n\rid_ordre_labo\x18\x01 \x01(\t\x12\x12\n\nid_dossier\x18\x02 \x01(\t\x12\x0e\n\x06statut\x18\x03 \x01(\t\x12\x0f\n\x07message\x18\x04 \x01(\t2\xad\x01\n\x0bLaboratoire\x12\x46\n\x0fObtenirResultat\x12\x1c.laboratoire.RequeteResultat\x1a\x15.laboratoire.Resultat\x12V\n\x13\x43reerDemandeAnalyse\x12\x1b.laboratoire.DemandeAnalyse\x1a\".laboratoire.ReponseDemandeAnalyseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -35,6 +35,10 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_REQUETERESULTAT']._serialized_end=71
   _globals['_RESULTAT']._serialized_start=73
   _globals['_RESULTAT']._serialized_end=152
-  _globals['_LABORATOIRE']._serialized_start=154
-  _globals['_LABORATOIRE']._serialized_end=239
+  _globals['_DEMANDEANALYSE']._serialized_start=155
+  _globals['_DEMANDEANALYSE']._serialized_end=295
+  _globals['_REPONSEDEMANDEANALYSE']._serialized_start=297
+  _globals['_REPONSEDEMANDEANALYSE']._serialized_end=396
+  _globals['_LABORATOIRE']._serialized_start=399
+  _globals['_LABORATOIRE']._serialized_end=572
 # @@protoc_insertion_point(module_scope)

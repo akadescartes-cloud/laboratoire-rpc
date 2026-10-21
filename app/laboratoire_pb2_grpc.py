@@ -39,13 +39,26 @@ class LaboratoireStub:
                 request_serializer=laboratoire__pb2.RequeteResultat.SerializeToString,
                 response_deserializer=laboratoire__pb2.Resultat.FromString,
                 _registered_method=True)
+        self.CreerDemandeAnalyse = channel.unary_unary(
+                '/laboratoire.Laboratoire/CreerDemandeAnalyse',
+                request_serializer=laboratoire__pb2.DemandeAnalyse.SerializeToString,
+                response_deserializer=laboratoire__pb2.ReponseDemandeAnalyse.FromString,
+                _registered_method=True)
 
 
 class LaboratoireServicer:
     """Missing associated documentation comment in .proto file."""
 
     def ObtenirResultat(self, request, context):
-        """Missing associated documentation comment in .proto file."""
+        """Récupérer un résultat existant
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def CreerDemandeAnalyse(self, request, context):
+        """Recevoir une nouvelle demande d'analyse
+        """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
@@ -57,6 +70,11 @@ def add_LaboratoireServicer_to_server(servicer, server):
                     servicer.ObtenirResultat,
                     request_deserializer=laboratoire__pb2.RequeteResultat.FromString,
                     response_serializer=laboratoire__pb2.Resultat.SerializeToString,
+            ),
+            'CreerDemandeAnalyse': grpc.unary_unary_rpc_method_handler(
+                    servicer.CreerDemandeAnalyse,
+                    request_deserializer=laboratoire__pb2.DemandeAnalyse.FromString,
+                    response_serializer=laboratoire__pb2.ReponseDemandeAnalyse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -96,3 +114,29 @@ class Laboratoire:
             metadata,
             _registered_method=True)
 
+    @staticmethod
+    def CreerDemandeAnalyse(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/laboratoire.Laboratoire/CreerDemandeAnalyse',
+            laboratoire__pb2.DemandeAnalyse.SerializeToString,
+            laboratoire__pb2.ReponseDemandeAnalyse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)

@@ -1,10 +1,16 @@
+
 syntax = "proto3";
 
 package laboratoire;
 
 service Laboratoire {
+  // Récupérer un résultat existant
   rpc ObtenirResultat (RequeteResultat)
       returns (Resultat);
+
+  // Recevoir une nouvelle demande d'analyse
+  rpc CreerDemandeAnalyse (DemandeAnalyse)
+      returns (ReponseDemandeAnalyse);
 }
 
 message RequeteResultat {
@@ -16,4 +22,21 @@ message Resultat {
   string analyse = 2;
   string valeur = 3;
   string statut = 4;
+}
+
+// Informations envoyées par le service Accueil
+message DemandeAnalyse {
+  string id_dossier = 1;
+  string medecin_prescripteur_id = 2;
+  repeated string analyses_prescrites = 3;
+  string priorite = 4;
+  string ordonnance_ref = 5;
+}
+
+// Réponse du service Laboratoire
+message ReponseDemandeAnalyse {
+  string id_ordre_labo = 1;
+  string id_dossier = 2;
+  string statut = 3;
+  string message = 4;
 }
