@@ -806,105 +806,142 @@ from PIL import Image, ImageDraw, ImageFont
 
 
 def generer_image_compte_rendu(id_resultat, resultat):
-    """Crée une image PNG du compte rendu à partir des données du laboratoire."""
-    largeur, hauteur = 1200, 850
-    image = Image.new("RGB", (largeur, hauteur), "#eef3f8")
+    """Génère une image PNG professionnelle du compte rendu."""
+    import os
+    import re
+
+    largeur, hauteur = 1240, 1754  # A4 vertical en haute résolution
+    image = Image.new("RGB", (largeur, hauteur), "#edf2f8")
     draw = ImageDraw.Draw(image)
 
-    try:
-        police = ImageFont.truetype(
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 24
-        )
-        police_petite = ImageFont.truetype(
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 18
-        )
-        police_titre = ImageFont.truetype(
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 30
-        )
-        police_grande = ImageFont.truetype(
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 36
-        )
-    except OSError:
-        police = ImageFont.load_default()
-        police_petite = ImageFont.load_default()
-        police_titre = ImageFont.load_default()
-        police_grande = ImageFont.load_default()
+    # Polices disponibles sur Render (Linux) et Windows.
+    chemins = [
+        ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
+        (r"C:\Windows\Fonts\arial.ttf",
+         r"C:\Windows\Fonts\arialbd.ttf"),
+    ]
+    regular_path = bold_path = None
+    for regular, bold in chemins:
+        if os.path.exists(regular) and os.path.exists(bold):
+            regular_path, bold_path = regular, bold
+            break
 
-    bleu = "#174a8b"
-    bleu_clair = "#eaf2fb"
-    texte = "#202b3d"
-    ligne = "#bdc9d8"
-    vert = "#126338"
+    def font(size, bold=False):
+        path = bold_path if bold else regular_path
+        try:
+            return ImageFont.truetype(path, size) if path else ImageFont.load_default()
+        except OSError:
+            return ImageFont.load_default()
+
+    f_small = font(19)
+    f_body = font(23)
+    f_body_bold = font(23, True)
+    f_section = font(27, True)
+    f_title = font(39, True)
+    f_brand = font(34, True)
+    f_footer = font(16)
+
+    navy = "#174a8b"
+    blue = "#3274bd"
+    pale = "#eaf2fc"
+    ink = "#243247"
+    muted = "#65738a"
+    line = "#cbd7e6"
+    green = "#137547"
 
     # Feuille blanche
-    draw.rounded_rectangle(
-        (55, 35, 1145, 815), radius=18, fill="white", outline="#d9e2ee", width=2
-    )
+    draw.rounded_rectangle((42, 35, 1198, 1718), radius=22,
+                           fill="white", outline="#d7e0ec", width=3)
 
-    # En-tête
-    draw.rounded_rectangle((55, 35, 1145, 160), radius=18, fill=bleu)
-    draw.rectangle((55, 125, 1145, 160), fill=bleu)
-    draw.text((95, 65), "LABORATOIRE D'ANALYSES MEDICALES",
-              font=police_titre, fill="white")
-    draw.text((95, 112), "Biologie medicale au service de votre sante",
-              font=police_petite, fill="#e4efff")
+    # En-tête bleu
+    draw.rounded_rectangle((43, 36, 1197, 255), radius=21, fill=navy)
+    draw.rectangle((43, 215, 1197, 255), fill=navy)
+    draw.text((88, 77), "LABORATOIRE D'ANALYSES", font=f_brand, fill="white")
+    draw.text((88, 121), "MEDICALES", font=f_brand, fill="white")
+    draw.text((90, 184), "Biologie medicale au service de votre sante",
+              font=f_body, fill="#e4efff")
+    draw.text((875, 88), "SERVICE DE LABORATOIRE", font=f_small, fill="white")
+    draw.text((875, 122), "COMPTE RENDU DE DEMONSTRATION",
+              font=f_footer, fill="#dceaff")
 
-    # Titre et métadonnées
-    draw.rounded_rectangle((90, 190, 1110, 320), radius=12, fill=bleu_clair)
-    draw.text((130, 210), "RESULTAT D'ANALYSE MEDICALE",
-              font=police_grande, fill=bleu)
-    draw.text((130, 270), f"Reference : {id_resultat}",
-              font=police_petite, fill=texte)
-    draw.text((600, 270), f"Statut : {resultat.get('statut', 'Non renseigne')}",
-              font=police_petite, fill=vert)
+    # Bandeau de référence
+    draw.rounded_rectangle((85, 292, 1155, 480), radius=18, fill=pale)
+    label = "RESULTAT D'ANALYSE MEDICALE"
+    bbox = draw.textbbox((0, 0), label, font=f_title)
+    draw.text(((largeur - (bbox[2] - bbox[0])) / 2, 323), label,
+              font=f_title, fill=navy)
+    draw.text((120, 405), f"Reference : {id_resultat}", font=f_body, fill=ink)
+    draw.text((700, 405), "Statut :", font=f_body, fill=ink)
+    draw.rounded_rectangle((790, 397, 1090, 443), radius=12, fill="#d9f5e5")
+    draw.text((810, 407), str(resultat.get("statut", "Non renseigne")),
+              font=f_body_bold, fill=green)
 
     # Informations patient
-    draw.text((100, 350), "INFORMATIONS PATIENT",
-              font=police_titre, fill=bleu)
-    draw.text((100, 395),
-              f"Identifiant patient : {resultat.get('patient_id', 'Non renseigne')}",
-              font=police_petite, fill=texte)
-    draw.text((100, 430), "Nom et prenom : Non renseignes",
-              font=police_petite, fill=texte)
+    draw.text((90, 535), "INFORMATIONS PATIENT", font=f_section, fill=navy)
+    draw.rounded_rectangle((85, 585, 1155, 785), radius=15, fill="#f3f6fa")
+    draw.text((120, 620), f"Identifiant patient : {resultat.get('patient_id', 'Non renseigne')}",
+              font=f_body, fill=ink)
+    draw.text((120, 670), "Nom : Non renseigne", font=f_body, fill=ink)
+    draw.text((120, 720), "Prenom : Non renseigne", font=f_body, fill=ink)
+    draw.text((650, 620), "Service : Consultation", font=f_body, fill=ink)
+    draw.text((650, 670), "Medecin prescripteur : Non renseigne",
+              font=f_small, fill=ink)
+    draw.text((650, 720), "Date de prelevement : Non renseignee",
+              font=f_small, fill=ink)
 
-    # Tableau des résultats
-    draw.text((100, 485), "RESULTATS D'ANALYSES",
-              font=police_titre, fill=bleu)
-    x0, y0, x1, y1 = 95, 535, 1105, 635
-    draw.rectangle((x0, y0, x1, y1), outline=ligne, width=2)
-    draw.rectangle((x0, y0, x1, 580), fill="#2f70b9")
-    colonnes = [95, 430, 700, 900, 1105]
-    for x in colonnes[1:-1]:
-        draw.line((x, y0, x, y1), fill=ligne, width=2)
-    draw.line((x0, 580, x1, 580), fill=ligne, width=2)
-
-    entetes = [
-        ("Analyse", 115), ("Resultat", 450), ("Unite", 720), ("Statut", 920)
-    ]
-    for libelle, x in entetes:
-        draw.text((x, 547), libelle, font=police_petite, fill="white")
+    # Tableau de résultats
+    draw.text((90, 835), "RESULTATS D'ANALYSES", font=f_section, fill=navy)
+    x0, y0, x1 = 85, 895, 1155
+    header_bottom = 970
+    row_bottom = 1075
+    cols = [85, 410, 680, 900, 1155]
+    draw.rounded_rectangle((x0, y0, x1, header_bottom), radius=8, fill=blue)
+    draw.rectangle((x0, y0 + 35, x1, header_bottom), fill=blue)
+    headers = ["Analyse", "Resultat", "Unite", "Statut"]
+    for i, text_value in enumerate(headers):
+        draw.text((cols[i] + 20, y0 + 25), text_value, font=f_body_bold, fill="white")
 
     valeur = str(resultat.get("valeur", "Non renseignee"))
     analyse = str(resultat.get("analyse", "Non renseignee"))
-    import re
-    match_unite = re.search(r"(g/L|g/dL|mg/dL|mmol/L)", valeur, re.I)
-    unite = match_unite.group(1) if match_unite else "—"
+    statut = str(resultat.get("statut", "Non renseigne"))
+    match = re.search(r"(g/L|g/dL|mg/dL|mmol/L)\b", valeur, re.I)
+    unite = match.group(1) if match else "—"
 
-    draw.text((115, 595), analyse, font=police_petite, fill=texte)
-    draw.text((450, 595), valeur, font=police_petite, fill=texte)
-    draw.text((720, 595), unite, font=police_petite, fill=texte)
-    draw.text((920, 595), str(resultat.get("statut", "Non renseigne")),
-              font=police_petite, fill=vert)
+    draw.rectangle((x0, header_bottom, x1, row_bottom),
+                   fill="white", outline=line, width=2)
+    for x in cols[1:-1]:
+        draw.line((x, header_bottom, x, row_bottom), fill=line, width=2)
+    cells = [analyse, valeur, unite, statut]
+    for i, value in enumerate(cells):
+        draw.text((cols[i] + 20, header_bottom + 37), value,
+                  font=f_body_bold if i == 1 else f_body,
+                  fill=green if i == 3 else ink)
 
-    # Mention de démonstration
-    draw.rounded_rectangle((95, 670, 1105, 745), radius=10, fill="#f1f5f9")
-    draw.text((120, 685), "Document de demonstration genere automatiquement.",
-              font=police_petite, fill=texte)
-    draw.text((120, 715), "Ne remplace pas un compte rendu medical valide.",
-              font=police_petite, fill=texte)
+    # Commentaires
+    draw.rounded_rectangle((85, 1125, 1155, 1320), radius=15, fill="#f1f5f9")
+    draw.text((120, 1160), "COMMENTAIRES", font=f_section, fill=navy)
+    draw.text((120, 1215), "Resultat transmis par le service laboratoire.",
+              font=f_body, fill=ink)
+    draw.text((120, 1260), "Les valeurs de reference et l'interpretation medicale",
+              font=f_small, fill=ink)
+    draw.text((120, 1290), "ne sont pas fournies dans cette demonstration.",
+              font=f_small, fill=ink)
+
+    # Pied de page et cachet graphique
+    draw.line((85, 1575, 1155, 1575), fill=line, width=3)
+    draw.text((90, 1605), "Document genere automatiquement a partir des donnees de demonstration.",
+              font=f_footer, fill=muted)
+    draw.text((90, 1638), "Ne remplace pas un compte rendu medical valide.",
+              font=f_footer, fill=muted)
+    draw.text((850, 1605), "SERVICE DE LABORATOIRE", font=f_small, fill=navy)
+    draw.text((850, 1640), "Compte rendu informatique", font=f_footer, fill=muted)
+    draw.ellipse((1045, 1585, 1135, 1675), outline=blue, width=3)
+    draw.text((1060, 1610), "LABO", font=f_footer, fill=blue)
+    draw.text((1057, 1635), "MEDICAL", font=f_footer, fill=blue)
 
     sortie = BytesIO()
-    image.save(sortie, format="PNG")
+    image.save(sortie, format="PNG", optimize=True)
     sortie.seek(0)
     return sortie
 
